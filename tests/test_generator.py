@@ -110,3 +110,31 @@ def test_generate_topic_ideas(generator, mock_anthropic):
     assert len(ideas) == 1
     assert ideas[0]["topic"]
     assert ideas[0]["pillar"]
+
+
+def test_facebook_caption_no_triple_newline(generator, mock_anthropic):
+    mock_anthropic.messages.create.return_value = _make_response(MOCK_FACEBOOK_RESPONSE)
+    post = generator.generate_facebook_post("Morning Routine")
+    assert "\n\n\n" not in post.caption, "Triple newline found before CTA"
+    assert "morning routine" in post.caption.lower()
+    assert "comments" in post.caption.lower()
+
+
+def test_call_claude_raises_on_empty_content(generator, mock_anthropic):
+    empty_resp = MagicMock()
+    empty_resp.content = []
+    empty_resp.stop_reason = "max_tokens"
+    mock_anthropic.messages.create.return_value = empty_resp
+    with pytest.raises(ValueError, match="empty response"):
+        generator._call_claude("test prompt")
+
+
+def test_parse_json_raises_on_malformed(generator):
+    # Regex finds the outer braces but json.loads fails on the invalid value
+    with pytest.raises(ValueError, match="Malformed JSON"):
+        generator._parse_json('{"caption": undefined}')
+
+
+def test_parse_json_raises_on_no_json(generator):
+    with pytest.raises(ValueError, match="No JSON found"):
+        generator._parse_json("This response has no JSON at all.")

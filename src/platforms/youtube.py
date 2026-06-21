@@ -42,9 +42,13 @@ class YouTubeClient(BasePlatform):
                 creds = pickle.load(f)
 
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            with open(token_file, "wb") as f:
-                pickle.dump(creds, f)
+            try:
+                creds.refresh(Request())
+                with open(token_file, "wb") as f:
+                    pickle.dump(creds, f)
+            except Exception as exc:
+                log.warning(f"Token refresh failed ({exc}); clearing credentials for re-auth.")
+                creds = None  # falls through to InstalledAppFlow below
 
         if not creds or not creds.valid:
             secrets_file = Path(config.YOUTUBE_CLIENT_SECRETS_FILE)

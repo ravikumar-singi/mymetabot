@@ -31,10 +31,11 @@ class InstagramClient(BasePlatform):
             return False
         url = f"{self.BASE}/{self.account_id}"
         r = requests.get(url, params={"access_token": self.token, "fields": "id,name"})
-        if r.ok:
-            log.info(f"Instagram account verified: {r.json()}")
+        data = r.json()
+        if r.ok and "error" not in data:
+            log.info(f"Instagram account verified: {data}")
             return True
-        log.error(f"Instagram credential check failed: {r.text}")
+        log.error(f"Instagram credential check failed: {data}")
         return False
 
     def _build_caption(self, content: ContentPost) -> str:
@@ -58,7 +59,9 @@ class InstagramClient(BasePlatform):
 
         r = requests.post(url, data=params)
         r.raise_for_status()
-        container_id = r.json()["id"]
+        data = r.json()
+        self._check_graph_api_response(data)
+        container_id = data["id"]
         log.debug(f"Instagram container created: {container_id}")
         return container_id
 
@@ -70,7 +73,9 @@ class InstagramClient(BasePlatform):
             "access_token": self.token,
         })
         r.raise_for_status()
-        post_id = r.json()["id"]
+        data = r.json()
+        self._check_graph_api_response(data)
+        post_id = data["id"]
         log.info(f"Instagram post published: {post_id}")
         return post_id
 
@@ -87,7 +92,9 @@ class InstagramClient(BasePlatform):
                 },
             )
             r.raise_for_status()
-            item_ids.append(r.json()["id"])
+            data = r.json()
+            self._check_graph_api_response(data)
+            item_ids.append(data["id"])
 
         r = requests.post(
             f"{self.BASE}/{self.account_id}/media",
@@ -99,7 +106,9 @@ class InstagramClient(BasePlatform):
             },
         )
         r.raise_for_status()
-        carousel_id = r.json()["id"]
+        data = r.json()
+        self._check_graph_api_response(data)
+        carousel_id = data["id"]
         return self._publish_container(carousel_id)
 
     def post(self, content: ContentPost) -> str:
@@ -122,11 +131,3 @@ class InstagramClient(BasePlatform):
         container_id = self._create_media_container(media_url, caption, is_video=is_video)
         return self._publish_container(container_id)
 
-    def post_text_only(self, content: ContentPost) -> str:
-        """Post as a text-only story (uses threads-style endpoint for text)."""
-        # Instagram doesn't support text-only posts via Graph API for feed.
-        # This can be used for Stories with stickers or captions only.
-        raise NotImplementedError(
-            "Instagram requires media (image/video). "
-            "Please provide a media_url or use image generation."
-        )

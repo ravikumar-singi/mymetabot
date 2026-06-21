@@ -129,6 +129,7 @@ def post(post_id: int):
     _ensure_api_key()
     init_db()
     session = get_session()
+    content = None
     try:
         content = session.get(ContentPost, post_id)
         if not content:
@@ -144,9 +145,10 @@ def post(post_id: int):
         console.print(f"[green]Posted! Platform ID: {pid}[/green]")
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        if session:
+        session.rollback()
+        if content is not None:
             content.status = PostStatus.FAILED
-            content.error_message = str(e)
+            content.error_message = str(e)[:500]
             session.commit()
     finally:
         session.close()

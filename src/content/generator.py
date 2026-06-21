@@ -43,20 +43,34 @@ class ContentGenerator:
             system=self._system_prompt(),
             messages=[{"role": "user", "content": user_prompt}],
         )
+        if not response.content:
+            raise ValueError(
+                f"Claude returned empty response (stop_reason={response.stop_reason})"
+            )
         return response.content[0].text
 
     def _parse_json(self, raw: str) -> dict:
         """Extract and parse JSON from Claude's response."""
         match = re.search(r"\{[\s\S]*\}", raw)
-        if match:
+        if not match:
+            raise ValueError(f"No JSON found in response:\n{raw[:200]}")
+        try:
             return json.loads(match.group())
-        raise ValueError(f"No JSON found in response:\n{raw}")
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Malformed JSON in Claude response: {exc}\nRaw: {raw[:200]}"
+            ) from exc
 
     def _parse_json_array(self, raw: str) -> list:
         match = re.search(r"\[[\s\S]*\]", raw)
-        if match:
+        if not match:
+            raise ValueError(f"No JSON array found in response:\n{raw[:200]}")
+        try:
             return json.loads(match.group())
-        raise ValueError(f"No JSON array found in response:\n{raw}")
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Malformed JSON array in Claude response: {exc}\nRaw: {raw[:200]}"
+            ) from exc
 
     def generate_instagram_post(self, topic: str, schedule_at: Optional[datetime] = None) -> ContentPost:
         log.info(f"Generating Instagram post for topic: {topic}")
@@ -94,10 +108,8 @@ class ContentGenerator:
         raw = self._call_claude(prompt)
         data = self._parse_json(raw)
 
-        caption_parts = [data.get("title", ""), data.get("caption", "")]
         cta = data.get("call_to_action", "")
-        if cta:
-            caption_parts.append(f"\n{cta}")
+        caption_parts = [data.get("title", ""), data.get("caption", ""), cta]
         full_caption = "\n\n".join(p for p in caption_parts if p)
 
         post = ContentPost(

@@ -32,10 +32,11 @@ class FacebookClient(BasePlatform):
             return False
         url = f"{self.BASE}/{self.page_id}"
         r = requests.get(url, params={"access_token": self.token, "fields": "id,name"})
-        if r.ok:
-            log.info(f"Facebook page verified: {r.json()}")
+        data = r.json()
+        if r.ok and "error" not in data:
+            log.info(f"Facebook page verified: {data}")
             return True
-        log.error(f"Facebook credential check failed: {r.text}")
+        log.error(f"Facebook credential check failed: {data}")
         return False
 
     def _build_message(self, content: ContentPost) -> str:
@@ -69,7 +70,9 @@ class FacebookClient(BasePlatform):
         url = f"{self.BASE}/{self.page_id}/feed"
         r = requests.post(url, data={"message": message, "access_token": self.token})
         r.raise_for_status()
-        post_id = r.json()["id"]
+        data = r.json()
+        self._check_graph_api_response(data)
+        post_id = data["id"]
         log.info(f"Facebook text post published: {post_id}")
         return post_id
 
@@ -81,7 +84,11 @@ class FacebookClient(BasePlatform):
             "access_token": self.token,
         })
         r.raise_for_status()
-        post_id = r.json().get("post_id") or r.json().get("id")
+        data = r.json()
+        self._check_graph_api_response(data)
+        post_id = data.get("post_id") or data.get("id")
+        if not post_id:
+            raise RuntimeError(f"Facebook photo post returned no ID: {data}")
         log.info(f"Facebook photo post published: {post_id}")
         return post_id
 
@@ -94,7 +101,9 @@ class FacebookClient(BasePlatform):
             "access_token": self.token,
         })
         r.raise_for_status()
-        post_id = r.json()["id"]
+        data = r.json()
+        self._check_graph_api_response(data)
+        post_id = data["id"]
         log.info(f"Facebook video post published: {post_id}")
         return post_id
 
@@ -106,6 +115,8 @@ class FacebookClient(BasePlatform):
             "access_token": self.token,
         })
         r.raise_for_status()
-        post_id = r.json()["id"]
+        data = r.json()
+        self._check_graph_api_response(data)
+        post_id = data["id"]
         log.info(f"Facebook link post published: {post_id}")
         return post_id

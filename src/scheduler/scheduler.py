@@ -20,6 +20,9 @@ from src.logger import get_logger
 
 log = get_logger(__name__)
 
+# Platforms that require media_url to be set before publishing
+_MEDIA_REQUIRED_PLATFORMS = {Platform.INSTAGRAM, Platform.YOUTUBE}
+
 
 def _get_platform_client(platform: Platform):
     if platform == Platform.INSTAGRAM:
@@ -50,22 +53,41 @@ def publish_due_posts() -> int:
         log.info(f"Found {len(due)} post(s) due for publishing.")
 
         for post in due:
+            # Defer posts that require media until media_url is populated
+            if post.platform in _MEDIA_REQUIRED_PLATFORMS and not post.media_url:
+                log.warning(
+                    f"[{post.platform}] Post {post.id} deferred — "
+                    "set media_url before next scheduled time."
+                )
+                continue
+
             try:
                 client = _get_platform_client(post.platform)
                 post_id = client.post(post)
                 post.status = PostStatus.POSTED
                 post.platform_post_id = post_id
                 post.posted_at = datetime.utcnow()
-                session.add(PostingLog(post_id=post.id, action="post", message=f"Posted: {post_id}", success=True))
+                session.add(PostingLog(
+                    post_id=post.id, action="post",
+                    message=f"Posted: {post_id}", success=True,
+                ))
+                session.commit()
                 published += 1
                 log.info(f"[{post.platform}] Post {post.id} published → {post_id}")
             except Exception as e:
+                session.rollback()
                 post.status = PostStatus.FAILED
-                post.error_message = str(e)
-                session.add(PostingLog(post_id=post.id, action="post", message=str(e), success=False))
+                post.error_message = str(e)[:500]
+                session.add(PostingLog(
+                    post_id=post.id, action="post",
+                    message=str(e)[:500], success=False,
+                ))
+                try:
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                    log.exception(f"[{post.platform}] Could not persist FAILED status for post {post.id}")
                 log.error(f"[{post.platform}] Post {post.id} FAILED: {e}")
-
-        session.commit()
     finally:
         session.close()
     return published

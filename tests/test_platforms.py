@@ -90,6 +90,74 @@ class TestFacebookClient:
         assert post_id == "photo_post_001"
 
 
+class TestInstagramValidateCredentials:
+    @patch("src.platforms.instagram.requests.get")
+    def test_validate_returns_false_on_meta_error_body(self, mock_get):
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {"error": {"code": 190, "message": "Invalid OAuth access token"}}
+        mock_get.return_value = resp
+
+        import os
+        os.environ["INSTAGRAM_ACCOUNT_ID"] = "acct_123"
+        os.environ["INSTAGRAM_ACCESS_TOKEN"] = "expired_token"
+
+        from src.platforms.instagram import InstagramClient
+        client = InstagramClient()
+        assert client.validate_credentials() is False
+
+    @patch("src.platforms.instagram.requests.post")
+    def test_post_raises_runtime_on_meta_error_body(self, mock_post):
+        container_resp = MagicMock()
+        container_resp.json.return_value = {"error": {"code": 190, "message": "Invalid token"}}
+        container_resp.raise_for_status = MagicMock()
+        mock_post.return_value = container_resp
+
+        import os
+        os.environ["INSTAGRAM_ACCOUNT_ID"] = "acct_123"
+        os.environ["INSTAGRAM_ACCESS_TOKEN"] = "token_abc"
+
+        from src.platforms.instagram import InstagramClient
+        client = InstagramClient()
+        post = _make_post(Platform.INSTAGRAM)
+        with pytest.raises(RuntimeError, match="Meta API error 190"):
+            client.post(post)
+
+
+class TestFacebookValidateCredentials:
+    @patch("src.platforms.facebook.requests.get")
+    def test_validate_returns_false_on_meta_error_body(self, mock_get):
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {"error": {"code": 190, "message": "Invalid OAuth access token"}}
+        mock_get.return_value = resp
+
+        import os
+        os.environ["FACEBOOK_PAGE_ID"] = "page_123"
+        os.environ["FACEBOOK_ACCESS_TOKEN"] = "expired_token"
+
+        from src.platforms.facebook import FacebookClient
+        client = FacebookClient()
+        assert client.validate_credentials() is False
+
+    @patch("src.platforms.facebook.requests.post")
+    def test_post_photo_raises_on_no_id(self, mock_post):
+        resp = MagicMock()
+        resp.json.return_value = {}  # no post_id, no id
+        resp.raise_for_status = MagicMock()
+        mock_post.return_value = resp
+
+        import os
+        os.environ["FACEBOOK_PAGE_ID"] = "page_123"
+        os.environ["FACEBOOK_ACCESS_TOKEN"] = "token_xyz"
+
+        from src.platforms.facebook import FacebookClient
+        client = FacebookClient()
+        post = _make_post(Platform.FACEBOOK)
+        with pytest.raises(RuntimeError, match="returned no ID"):
+            client.post(post)
+
+
 class TestDatabaseModels:
     def test_content_post_repr(self):
         post = ContentPost(platform=Platform.INSTAGRAM, status=PostStatus.DRAFT)
