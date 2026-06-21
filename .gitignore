@@ -10,7 +10,7 @@ logs/
 # YouTube credentials (sensitive)
 client_secrets.json
 youtube_token.json
-
+authenticate.py
 # Python
 __pycache__/
 *.py[cod]
